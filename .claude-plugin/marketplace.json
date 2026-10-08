@@ -1,0 +1,14 @@
+{
+  "name": "nairos",
+  "owner": {
+    "name": "Nairos"
+  },
+  "plugins": [
+    {
+      "name": "nairos-product-extractor",
+      "source": "./",
+      "description": "Documents → Nairos product import file"
+    }
+  ],
+  "description": "Nairos plugins for Claude Code: turn product documents into Nairos catalog imports."
+}

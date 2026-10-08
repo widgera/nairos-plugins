@@ -1,0 +1,19 @@
+{
+  "name": "nairos-product-extractor",
+  "version": "0.2.0",
+  "description": "Turn supplier catalogs, price lists, scans, photos, spreadsheets and Office files into a product file you can import into your Nairos catalog. Your own Claude does the reading; bundled scripts check every record.",
+  "author": {
+    "name": "Nairos",
+    "url": "https://nairos.com"
+  },
+  "keywords": [
+    "products",
+    "catalog",
+    "price list",
+    "extraction",
+    "ocr",
+    "nairos"
+  ],
+  "repository": "https://github.com/widgera/nairos-plugins",
+  "homepage": "https://github.com/widgera/nairos-plugins"
+}

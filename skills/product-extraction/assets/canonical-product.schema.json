@@ -1,0 +1,521 @@
+{
+ "$defs": {
+  "_Money": {
+   "properties": {
+    "amount": {
+     "anyOf": [
+      {
+       "type": "number"
+      },
+      {
+       "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+       "type": "string"
+      }
+     ],
+     "title": "Amount"
+    },
+    "currency": {
+     "maxLength": 3,
+     "minLength": 3,
+     "title": "Currency",
+     "type": "string"
+    }
+   },
+   "required": [
+    "amount",
+    "currency"
+   ],
+   "title": "_Money",
+   "type": "object"
+  }
+ },
+ "properties": {
+  "external_id": {
+   "maxLength": 255,
+   "title": "External Id",
+   "type": "string"
+  },
+  "title": {
+   "maxLength": 255,
+   "title": "Title",
+   "type": "string"
+  },
+  "description": {
+   "anyOf": [
+    {
+     "type": "string"
+    },
+    {
+     "type": "null"
+    }
+   ],
+   "default": null,
+   "title": "Description"
+  },
+  "sku": {
+   "anyOf": [
+    {
+     "type": "string"
+    },
+    {
+     "type": "null"
+    }
+   ],
+   "default": null,
+   "title": "Sku"
+  },
+  "barcode": {
+   "anyOf": [
+    {
+     "type": "string"
+    },
+    {
+     "type": "null"
+    }
+   ],
+   "default": null,
+   "title": "Barcode"
+  },
+  "gtin": {
+   "anyOf": [
+    {
+     "type": "string"
+    },
+    {
+     "type": "null"
+    }
+   ],
+   "default": null,
+   "title": "Gtin"
+  },
+  "handle": {
+   "anyOf": [
+    {
+     "type": "string"
+    },
+    {
+     "type": "null"
+    }
+   ],
+   "default": null,
+   "title": "Handle"
+  },
+  "source_url": {
+   "anyOf": [
+    {
+     "type": "string"
+    },
+    {
+     "type": "null"
+    }
+   ],
+   "default": null,
+   "title": "Source Url"
+  },
+  "canonical_url": {
+   "anyOf": [
+    {
+     "type": "string"
+    },
+    {
+     "type": "null"
+    }
+   ],
+   "default": null,
+   "title": "Canonical Url"
+  },
+  "price": {
+   "anyOf": [
+    {
+     "$ref": "#/$defs/_Money"
+    },
+    {
+     "type": "null"
+    }
+   ],
+   "default": null
+  },
+  "compare_at_amount": {
+   "anyOf": [
+    {
+     "$ref": "#/$defs/_Money"
+    },
+    {
+     "type": "null"
+    }
+   ],
+   "default": null
+  },
+  "currency": {
+   "anyOf": [
+    {
+     "type": "string"
+    },
+    {
+     "type": "null"
+    }
+   ],
+   "default": null,
+   "title": "Currency"
+  },
+  "price_type": {
+   "anyOf": [
+    {
+     "type": "string"
+    },
+    {
+     "type": "null"
+    }
+   ],
+   "default": null,
+   "title": "Price Type"
+  },
+  "in_stock": {
+   "anyOf": [
+    {
+     "type": "boolean"
+    },
+    {
+     "type": "null"
+    }
+   ],
+   "default": null,
+   "title": "In Stock"
+  },
+  "stock_count": {
+   "anyOf": [
+    {
+     "type": "integer"
+    },
+    {
+     "type": "null"
+    }
+   ],
+   "default": null,
+   "title": "Stock Count"
+  },
+  "store_availability": {
+   "anyOf": [
+    {},
+    {
+     "type": "null"
+    }
+   ],
+   "default": null,
+   "title": "Store Availability"
+  },
+  "brand": {
+   "anyOf": [
+    {
+     "type": "string"
+    },
+    {
+     "type": "null"
+    }
+   ],
+   "default": null,
+   "title": "Brand"
+  },
+  "category": {
+   "anyOf": [
+    {
+     "type": "string"
+    },
+    {
+     "type": "null"
+    }
+   ],
+   "default": null,
+   "title": "Category"
+  },
+  "category_path": {
+   "anyOf": [
+    {
+     "items": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "type": "array"
+    },
+    {
+     "type": "null"
+    }
+   ],
+   "default": null,
+   "title": "Category Path"
+  },
+  "tags": {
+   "anyOf": [
+    {
+     "items": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "type": "array"
+    },
+    {
+     "type": "null"
+    }
+   ],
+   "default": null,
+   "title": "Tags"
+  },
+  "badges": {
+   "anyOf": [
+    {
+     "items": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "type": "array"
+    },
+    {
+     "type": "null"
+    }
+   ],
+   "default": null,
+   "title": "Badges"
+  },
+  "attributes": {
+   "anyOf": [
+    {},
+    {
+     "type": "null"
+    }
+   ],
+   "default": null,
+   "title": "Attributes"
+  },
+  "primary_image_url": {
+   "anyOf": [
+    {
+     "additionalProperties": true,
+     "type": "object"
+    },
+    {
+     "type": "null"
+    }
+   ],
+   "default": null,
+   "title": "Primary Image Url"
+  },
+  "image_urls": {
+   "anyOf": [
+    {
+     "items": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "type": "array"
+    },
+    {
+     "type": "null"
+    }
+   ],
+   "default": null,
+   "title": "Image Urls"
+  },
+  "video_urls": {
+   "anyOf": [
+    {
+     "items": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "type": "array"
+    },
+    {
+     "type": "null"
+    }
+   ],
+   "default": null,
+   "title": "Video Urls"
+  },
+  "related_items": {
+   "anyOf": [
+    {},
+    {
+     "type": "null"
+    }
+   ],
+   "default": null,
+   "title": "Related Items"
+  },
+  "seo_title": {
+   "anyOf": [
+    {
+     "type": "string"
+    },
+    {
+     "type": "null"
+    }
+   ],
+   "default": null,
+   "title": "Seo Title"
+  },
+  "seo_description": {
+   "anyOf": [
+    {
+     "type": "string"
+    },
+    {
+     "type": "null"
+    }
+   ],
+   "default": null,
+   "title": "Seo Description"
+  },
+  "rating_avg": {
+   "anyOf": [
+    {
+     "type": "number"
+    },
+    {
+     "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+     "type": "string"
+    },
+    {
+     "type": "null"
+    }
+   ],
+   "default": null,
+   "title": "Rating Avg"
+  },
+  "rating_count": {
+   "anyOf": [
+    {
+     "type": "integer"
+    },
+    {
+     "type": "null"
+    }
+   ],
+   "default": null,
+   "title": "Rating Count"
+  },
+  "provider_name": {
+   "anyOf": [
+    {
+     "type": "string"
+    },
+    {
+     "type": "null"
+    }
+   ],
+   "default": null,
+   "title": "Provider Name"
+  },
+  "provider_id": {
+   "anyOf": [
+    {
+     "type": "string"
+    },
+    {
+     "type": "null"
+    }
+   ],
+   "default": null,
+   "title": "Provider Id"
+  },
+  "provider_kind": {
+   "anyOf": [
+    {
+     "type": "string"
+    },
+    {
+     "type": "null"
+    }
+   ],
+   "default": null,
+   "title": "Provider Kind"
+  },
+  "published_at": {
+   "anyOf": [
+    {
+     "format": "date-time",
+     "type": "string"
+    },
+    {
+     "type": "null"
+    }
+   ],
+   "default": null,
+   "title": "Published At"
+  },
+  "valid_from": {
+   "anyOf": [
+    {
+     "format": "date-time",
+     "type": "string"
+    },
+    {
+     "type": "null"
+    }
+   ],
+   "default": null,
+   "title": "Valid From"
+  },
+  "valid_through": {
+   "anyOf": [
+    {
+     "format": "date-time",
+     "type": "string"
+    },
+    {
+     "type": "null"
+    }
+   ],
+   "default": null,
+   "title": "Valid Through"
+  },
+  "recency_at": {
+   "anyOf": [
+    {
+     "format": "date-time",
+     "type": "string"
+    },
+    {
+     "type": "null"
+    }
+   ],
+   "default": null,
+   "title": "Recency At"
+  }
+ },
+ "required": [
+  "external_id",
+  "title"
+ ],
+ "title": "Nairos canonical product record (ecommerce_360_canonical @ app-products 73f0121)",
+ "type": "object"
+}
