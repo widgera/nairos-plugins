@@ -52,6 +52,12 @@ Claude works in `./nairos-extract/` and finishes with `nairos-extract/output/`:
 | `report.md` | counts (found vs. listed in the document), flags, rejected rows |
 | `images/<code>.jpg` | product photos cut from the document, named by product code |
 
+Many files at once: put them in one folder and ask for one import file. Claude hands each document
+to its own helper, a few at a time, and merges the results — the same product code in a catalog and a
+price list becomes one product (specs from one, price from the other), and disagreements between files
+are flagged. If a long job stops, ask again in the same folder: finished files are skipped.
+`report.md` and `preview.html` show the counts per file.
+
 Good to know:
 - Only what the document says goes into the file — no price in the document, no price in the file.
 - Importing a product again replaces it completely, including edits made in the console.

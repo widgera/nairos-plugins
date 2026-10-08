@@ -125,18 +125,19 @@ class Finalizer:
 
         self.validator = Draft202012Validator(schema)
 
-    def page_text(self, source: dict) -> str | None:
+    def page_text(self, source: dict, work: Path | None = None) -> str | None:
         if source.get("text"):
             return source["text"]
-        if self.text_dir and source.get("page"):
-            key = int(source["page"])
+        text_dir = self.text_dir or (work / "text" if work else None)
+        if text_dir and source.get("page"):
+            key = (str(text_dir), int(source["page"]))
             if key not in self._page_text:
-                p = self.text_dir / f"p{key:03d}.txt"
+                p = text_dir / f"p{key[1]:03d}.txt"
                 self._page_text[key] = p.read_text(encoding="utf-8") if p.exists() else None
             return self._page_text[key]
         return None
 
-    def normalise(self, rec: dict) -> tuple[dict | None, list[str], str | None]:
+    def normalise(self, rec: dict, work: Path | None = None) -> tuple[dict | None, list[str], str | None]:
         data = dict(rec.get("data") or {})
         flags = list(rec.get("flags") or [])
         source = rec.get("source") or {}
@@ -282,7 +283,7 @@ class Finalizer:
         data["external_id"] = str(ext).strip()[:255]
 
         # grounding against the source text
-        text = None if source.get("method") == "vision" else self.page_text(source)
+        text = None if source.get("method") == "vision" else self.page_text(source, work)
         if text:
             hay = norm_text(text)
             hay_digits = re.sub(r"\D", "", hay)
@@ -342,7 +343,7 @@ def _crop_box(work: Path, source: dict):
     return None
 
 
-def build_preview(out: Path, order, accepted, meta, rejected, expected, flagged, drafts) -> int:
+def build_preview(out: Path, order, accepted, meta, rejected, expected, flagged, drafts, file_rows=None) -> int:
     """Write preview.html (self-contained) and cut product photos into out/images/."""
     from datetime import datetime
 
@@ -358,6 +359,7 @@ def build_preview(out: Path, order, accepted, meta, rejected, expected, flagged,
         m = meta[ext]
         src, work = m["source"], m["work"]
         item = {"env": {"entityType": "product", "recordId": ext, "data": accepted[ext]}, "flags": m["flags"],
+                "alsoIn": m.get("also_in", []),
                 "source": {k: v for k, v in src.items() if k in ("file", "page", "sheet", "row", "text", "method")}}
         page = src.get("page")
         if page:
@@ -402,11 +404,47 @@ def build_preview(out: Path, order, accepted, meta, rejected, expected, flagged,
         "products": products,
         "pages": pages_b64,
         "rejected": [{"where": r["where"], "reason": r["reason"]} for r in rejected],
+        "fileRows": file_rows or [],
     }
     tpl = (HERE.parent / "assets" / "preview_template.html").read_text(encoding="utf-8")
     payload = json.dumps(data, ensure_ascii=False).replace("</", "<\\/")
     (out / "preview.html").write_text(tpl.replace("__DATA__", payload), encoding="utf-8")
     return len(crops)
+
+
+UNION_LISTS = {"tags", "badges", "image_urls", "video_urls"}
+# Facts that must agree between documents; a difference is flagged for a person to check.
+CONFLICT_FIELDS = {"price", "compare_at_amount", "currency", "barcode", "gtin", "sku", "brand", "stock_count", "in_stock"}
+
+
+def merge_records(base: dict, extra: dict) -> list[str]:
+    """Fold `extra` (same product code, another file) into `base`. Returns conflict flags.
+
+    Missing fields are filled in; equal values are fine; different values keep the first file's
+    value and are flagged, so a person checks them against both sources.
+    """
+    conflicts = []
+    for k, v in extra.items():
+        if k == "external_id":
+            continue
+        if k not in base:
+            base[k] = v
+        elif k == "attributes":
+            have = {a["key"]: a for a in base["attributes"]}
+            for a in v:
+                if a["key"] not in have:
+                    base["attributes"].append(a)
+                elif str(have[a["key"]]["value"]) != str(a["value"]):
+                    conflicts.append(f"conflict:{a['key']}={have[a['key']]['value']}|{a['value']}")
+        elif k in UNION_LISTS and isinstance(v, list):
+            base[k] = base[k] + [x for x in v if x not in base[k]]
+        elif base[k] != v and k in CONFLICT_FIELDS:
+            shown = (lambda x: x.get("amount") if isinstance(x, dict) else x)
+            if shown(base[k]) != shown(v):
+                conflicts.append(f"conflict:{k}={shown(base[k])}|{shown(v)}")
+        # other fields (title, description, category wording…) differ naturally between
+        # documents; the first file's wording is kept without a flag
+    return conflicts
 
 
 def main() -> int:
@@ -437,24 +475,45 @@ def main() -> int:
     rejected = []
     dup_merged = 0
     dup_renamed = 0
+    cross_merged = 0
+    per_file: dict[str, Counter] = {}
     flag_counts: Counter = Counter()
     for p, n, rec in drafts:
         if "_bad_json" in rec:
             rejected.append({"where": f"{p}:{n}", "reason": "bad JSON: " + rec["_bad_json"]})
             continue
-        data, flags, reason = fin.normalise(rec)
+        work = Path(p).resolve().parent.parent
+        src_file = str((rec.get("source") or {}).get("file") or Path(p).stem)
+        per_file.setdefault(src_file, Counter())["drafted"] += 1
+        data, flags, reason = fin.normalise(rec, work)
         if reason or data is None:
             rejected.append({"where": f"{p}:{n}", "reason": reason or "empty", "record": rec})
+            per_file[src_file]["rejected"] += 1
             continue
         errors = fin.validate(data)
         if errors:
             rejected.append({"where": f"{p}:{n}", "reason": "; ".join(errors)[:500], "record": data})
+            per_file[src_file]["rejected"] += 1
             continue
         ext = data["external_id"]
         if ext in accepted:
             if accepted[ext] == data:
                 dup_merged += 1
+                per_file[src_file]["merged"] += 1
                 continue
+            first_file = str(meta[ext]["source"].get("file") or "")
+            if first_file and src_file != first_file:
+                # Same code in another document (catalog + price list): one product.
+                trial = json.loads(json.dumps(accepted[ext]))
+                conflicts = merge_records(trial, data)
+                if not fin.validate(trial):
+                    accepted[ext] = trial
+                    kept = [f for f in flags if f != "title_mostly_not_in_source"]  # its title isn't used
+                    meta[ext]["flags"] = sorted(set(meta[ext]["flags"] + kept + conflicts))
+                    meta[ext].setdefault("also_in", []).append(src_file)
+                    cross_merged += 1
+                    per_file[src_file]["merged"] += 1
+                    continue
             k = 2
             while f"{ext}-{k}" in accepted:
                 k += 1
@@ -465,7 +524,8 @@ def main() -> int:
             ext = data["external_id"]
         accepted[ext] = data
         order.append(ext)
-        meta[ext] = {"flags": flags, "source": rec.get("source") or {}, "work": Path(p).resolve().parent.parent}
+        meta[ext] = {"flags": flags, "source": rec.get("source") or {}, "work": work}
+        per_file[src_file]["products"] += 1
 
     with (out / "products.ndjson").open("w", encoding="utf-8") as f:
         for ext in order:
@@ -488,6 +548,26 @@ def main() -> int:
                         " ".join(m["flags"]), where.strip()])
 
     flagged = sum(1 for e in order if meta[e]["flags"])
+    done_info: dict[str, dict] = {}
+    for dp in {Path(p).resolve().parent.parent / "DONE.json" for p in a.drafts}:
+        if dp.exists():
+            try:
+                info = json.loads(dp.read_text(encoding="utf-8"))
+                done_info[str(info.get("file") or dp.parent.name)] = info
+            except json.JSONDecodeError:
+                pass
+    expected_total = a.expected
+    if expected_total is None and done_info and all(isinstance(v.get("expected"), int) for v in done_info.values()):
+        expected_total = sum(v["expected"] for v in done_info.values())
+    file_rows = []
+    for fname in sorted(set(per_file) | set(done_info)):
+        c = per_file.get(fname, Counter())
+        exp = (done_info.get(fname) or {}).get("expected")
+        got = c["products"] + c["merged"]
+        status = "—" if exp is None else ("OK" if got == exp else f"check ({got - exp:+d})")
+        file_rows.append({"file": fname, "expected": exp, "drafted": c["drafted"], "products": c["products"],
+                          "merged": c["merged"], "rejected": c["rejected"], "status": status,
+                          "notes": (done_info.get(fname) or {}).get("notes", [])})
     lines = [
         "# Product extraction report", "",
         f"- Draft records read: **{len(drafts)}**",
@@ -495,11 +575,20 @@ def main() -> int:
         f"- Rejected (not in the file): **{len(rejected)}**",
         f"- Exact duplicates merged: {dup_merged}",
         f"- Different products sharing an id (renamed with -2, -3…): {dup_renamed}",
+        f"- Same product found in several files (merged into one): {cross_merged}",
         f"- Products with at least one flag: {flagged}",
     ]
     if a.expected is not None:
         diff = len(order) - a.expected
         lines.append(f"- Expected from the source: {a.expected} → {'OK' if diff == 0 else f'MISMATCH ({diff:+d})'}")
+    if len(file_rows) > 1 or done_info:
+        lines += ["", "## Per file", "", "| File | Listed in file | Drafted | New products | Merged into others | Rejected | Status |",
+                  "|---|---|---|---|---|---|---|"]
+        lines += [f"| {r['file']} | {r['expected'] if r['expected'] is not None else '—'} | {r['drafted']} | {r['products']} | "
+                  f"{r['merged']} | {r['rejected']} | {r['status']} |" for r in file_rows]
+        notes = [(r["file"], n) for r in file_rows for n in r["notes"]]
+        if notes:
+            lines += ["", "Notes from the files:"] + [f"- {f}: {n}" for f, n in notes]
     if flag_counts:
         lines += ["", "## Flags", ""] + [f"- `{k}`: {v}" for k, v in flag_counts.most_common()]
     if rejected:
@@ -509,7 +598,7 @@ def main() -> int:
               f"- Upload: `{out / 'products.ndjson'}`",
               f"- Review sheet: `{out / 'review.csv'}`",
               "", "Importing the same product again replaces it completely in the catalog, including edits made in the console."]
-    crops = build_preview(out, order, accepted, meta, rejected, a.expected, flagged, [Path(p) for p in a.drafts])
+    crops = build_preview(out, order, accepted, meta, rejected, expected_total, flagged, [Path(p) for p in a.drafts], file_rows)
     lines += ["", f"Preview (open in a browser): `{out / 'preview.html'}`"]
     if crops:
         lines += [f"Product photos: {crops} saved in `{out / 'images'}` — check `{out / 'images-check.png'}`"]

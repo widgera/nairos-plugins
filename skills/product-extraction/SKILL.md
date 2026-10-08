@@ -62,5 +62,22 @@ Work in `./nairos-extract/<file-name>/` in the user's folder.
    console. Photos are saved in `images/` by product code but aren't in the import file (the catalog
    needs image URLs).
 
+## Many files
+
+For three or more documents, don't read them all in this conversation — long jobs lose products.
+1. List the files and settle the shared choices once (title language, currency, category wording);
+   ask the user if they're around.
+2. Give each file to the `document-extractor` agent (Agent tool), 3–4 at a time in parallel. In each
+   prompt pass: the document path, its work folder `./nairos-extract/<name>/`, this skill's folder
+   (the base directory shown when this skill loaded) and the shared choices.
+3. A file whose work folder already has `DONE.json` is finished — skip it, so a stopped job resumes.
+4. When all are done, run `finalize.py` once over every `./nairos-extract/*/draft/*.jsonl` (no
+   `--expected`; it reads each file's `DONE.json`). The same product code in different files is
+   merged into one product (catalog specs + price list price); disagreements are flagged as
+   `conflict:<field>` — check them against both sources.
+5. Hand over with the per-file table from `report.md`.
+
+One or two files: do them yourself as above.
+
 When the document is bilingual and the user hasn't said which language to use for titles and
 attribute names, ask; if they're not around, use the document's main language and say so.
