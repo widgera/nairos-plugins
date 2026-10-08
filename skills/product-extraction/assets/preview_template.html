@@ -30,6 +30,13 @@ h1{font-size:clamp(20px,2.6vw,28px);margin:0;text-wrap:balance}
 .bar button,.more{font:600 14px var(--ui);border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:7px 12px;border-radius:8px;cursor:pointer}
 .bar button[aria-pressed="true"]{box-shadow:inset 0 0 0 2px var(--ink)}
 .bar input{font:14px var(--ui);padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink);min-width:220px;flex:1 1 220px;max-width:360px}
+.bar select{font:14px var(--ui);padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink);max-width:100%}
+.ftable{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow-x:auto}
+.ftable table{min-width:620px}
+.ftable th,.ftable td{padding:7px 12px;text-align:left;font-size:13px;border-top:1px solid var(--line);width:auto;color:var(--ink)}
+.ftable th{color:var(--muted);font-weight:600;border-top:0}
+.ftable td.num{font-variant-numeric:tabular-nums}
+.st-ok{color:var(--ok);font-weight:600}.st-bad{color:var(--bad);font-weight:600}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;cursor:pointer;display:flex;flex-direction:column;text-align:left;font:inherit;color:inherit;padding:0}
 .card:focus-visible,.bar button:focus-visible,.more:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
@@ -80,10 +87,12 @@ footer{color:var(--muted);font-size:13px}
     <p class="sub" id="subtitle"></p>
   </header>
   <div class="stats" id="stats"></div>
+  <div class="ftable" id="ftable" hidden></div>
   <div class="bar">
     <button type="button" data-f="all" aria-pressed="true">All</button>
     <button type="button" data-f="flagged" aria-pressed="false">Flagged</button>
     <button type="button" data-f="clean" aria-pressed="false">No flags</button>
+    <select id="fileSel" aria-label="Filter by file" hidden></select>
     <input id="q" type="search" placeholder="Search title, code, brand…" aria-label="Search products">
   </div>
   <div class="grid" id="grid"></div>
@@ -107,12 +116,15 @@ const D = JSON.parse(document.getElementById('data').textContent);
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const FLAG_TEXT = {
-  read_from_image:'read from the image', external_id_generated:'no code in document — id generated',
+  read_from_image:'read from the image', conflict:'files disagree', external_id_generated:'no code in document — id generated',
   title_mostly_not_in_source:'title not found in source text', has_duplicate_id:'another product had the same code',
   price_without_currency:'price had no currency', barcode_check_digit_failed:'barcode check digit fails',
 };
-const flagLabel = f => FLAG_TEXT[f] || FLAG_TEXT[f.split(':')[0]] || f.replace(/_/g,' ');
-let filter = 'all', query = '', shown = 0; const PAGE = 60;
+const flagLabel = f => {
+  if (f.startsWith('conflict:')){ const [k, v] = f.slice(9).split('='); const [a, b] = (v || '').split('|'); return `files disagree on ${k}: ${a} vs ${b}`; }
+  return FLAG_TEXT[f] || FLAG_TEXT[f.split(':')[0]] || f.replace(/_/g,' ');
+};
+let filter = 'all', query = '', fileF = '', shown = 0; const PAGE = 60;
 
 function money(p){ return p ? `${Number(p.amount).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})} ${p.currency}` : null; }
 function attrs(d){ return d.attributes || []; }
@@ -121,7 +133,7 @@ function chips(d){ return attrs(d).filter(a => !DULL.test(a.key) && (typeof a.va
 
 function header(){
   const s = D.summary;
-  $('title').textContent = `Extracted products — ${s.files.join(', ')}`;
+  $('title').textContent = s.files.length > 3 ? `Extracted products — ${s.files.length} files` : `Extracted products — ${s.files.join(', ')}`;
   $('subtitle').textContent = `Created ${s.created}. Upload products.ndjson in the Nairos console: space → Products → Catalog → open the product table → Import.`;
   const st = [
     ['ok', s.products, 'products in the import file'],
@@ -130,12 +142,22 @@ function header(){
     [s.rejected ? 'bad' : 'ok', s.rejected, 'rejected'],
   ];
   $('stats').innerHTML = st.map(([c,v,l]) => `<div class="stat ${c}"><b>${esc(v)}</b><span>${esc(l)}</span></div>`).join('');
+  const rows = D.fileRows || [];
+  if (rows.length > 1){
+    $('ftable').hidden = false;
+    $('ftable').innerHTML = `<table><tr><th>File</th><th>Listed in file</th><th>New products</th><th>Merged into others</th><th>Rejected</th><th>Status</th></tr>` +
+      rows.map(r => `<tr><td>${esc(r.file)}</td><td class="num">${r.expected ?? '—'}</td><td class="num">${r.products}</td><td class="num">${r.merged}</td><td class="num">${r.rejected}</td><td class="${r.status==='OK'?'st-ok':(r.status.startsWith('check')?'st-bad':'')}">${esc(r.status)}</td></tr>`).join('') + `</table>`;
+    $('fileSel').hidden = false;
+    $('fileSel').innerHTML = `<option value="">All files</option>` + rows.map(r => `<option value="${esc(r.file)}">${esc(r.file)}</option>`).join('');
+    $('fileSel').onchange = e => { fileF = e.target.value; renderGrid(true); };
+  }
   if (D.rejected.length){ $('rej').hidden = false; $('rejList').innerHTML = D.rejected.map(r => `<li><code>${esc(r.where)}</code> ${esc(r.reason)}</li>`).join(''); }
   $('foot').textContent = 'Photos on the cards are cut from the document for this preview and saved in output/images/ by product code. They are not in the import file, because the catalog needs a web address for images.';
 }
 function list(){
   const q = query.toLowerCase();
   return D.products.filter(p => (filter==='all') || (filter==='flagged' ? p.flags.length : !p.flags.length))
+    .filter(p => !fileF || (p.source && p.source.file === fileF) || (p.alsoIn || []).includes(fileF))
     .filter(p => !q || [p.env.data.title, p.env.data.external_id, p.env.data.brand, p.env.data.category].join(' ').toLowerCase().includes(q));
 }
 function cardHtml(p, i){
@@ -173,6 +195,7 @@ function openDetail(i){
   let src = '';
   if (s.page && D.pages[p.pageKey]) src += `<img class="page" alt="page ${esc(s.page)}" src="data:image/jpeg;base64,${D.pages[p.pageKey]}">`;
   if (s.text) src += `<div class="rowsrc">${esc(s.text)}</div>`;
+  if ((p.alsoIn || []).length) src += `<p class="note">Also found in: ${esc(p.alsoIn.join(', '))} — merged into this product.</p>`;
   src += `<p class="note">${esc(s.file || '')}${s.page ? `, page ${esc(s.page)}` : ''}${s.sheet ? `, sheet ${esc(s.sheet)}, row ${esc(s.row)}` : ''}${s.method === 'vision' ? ' — read from the page image' : ''}</p>`;
   $('dSrc').innerHTML = src;
   $('dJson').innerHTML = highlight(p.env);
